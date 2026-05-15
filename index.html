@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AQI Checker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    body {
+      background-color: #0f1117; color: #e8ecf4;
+      font-family: Arial, sans-serif;
+      display: flex; flex-direction: column;
+      align-items: center; padding: 40px 20px;
+    }
+    h1 { font-size: 2rem; margin-bottom: 6px; color: #4cf0b4; }
+    p.subtitle { color: #888; margin-bottom: 30px; }
+    .search-row { display: flex; gap: 10px; margin-bottom: 20px; }
+    input {
+      padding: 12px 16px; font-size: 1rem; width: 260px;
+      background: #1c1f2e; border: 1px solid #2e3348;
+      color: white; border-radius: 6px; outline: none;
+    }
+    input:focus { border-color: #4cf0b4; }
+    button {
+      padding: 12px 22px; background: #4cf0b4; color: #0f1117;
+      font-size: 1rem; font-weight: bold; border: none;
+      border-radius: 6px; cursor: pointer;
+    }
+    button:hover    { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .error { color: #f87171; margin-bottom: 16px; display: none; }
+    .result-box {
+      background: #1c1f2e; border: 1px solid #2e3348;
+      border-radius: 10px; padding: 28px;
+      width: 100%; max-width: 560px; display: none;
+    }
+    .city-name { font-size: 1.5rem; font-weight: bold; margin-bottom: 16px; }
+    .aqi-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .aqi-number { font-size: 3.5rem; font-weight: bold; }
+    .cat-title  { font-size: 1.1rem; font-weight: bold; }
+    .cat-advice { font-size: 0.85rem; color: #aaa; margin-top: 4px; }
+    .source-tag { font-size: 0.72rem; color: #555; margin-bottom: 20px; }
+    .pollutant-row { display: flex; gap: 10px; margin-bottom: 24px; }
+    .pollutant-box {
+      flex: 1; background: #13161f; border: 1px solid #2e3348;
+      border-radius: 8px; padding: 14px; text-align: center;
+    }
+    .pollutant-box .value { font-size: 1.4rem; font-weight: bold; color: #4cf0b4; }
+    .pollutant-box .label { font-size: 0.75rem; color: #888; margin-top: 4px; }
+    .mask-box {
+      background: #13161f; border: 1px solid #2e3348;
+      border-radius: 8px; padding: 16px; margin-bottom: 24px; text-align: center;
+    }
+    .mask-emoji { font-size: 2rem; }
+    .mask-title { font-size: 1rem; font-weight: bold; margin-top: 6px; }
+    .mask-tip   { font-size: 0.82rem; color: #aaa; margin-top: 4px; }
+    .chart-title {
+      font-size: 0.85rem; color: #888;
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+    }
+    .chart-wrap { height: 200px; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+
+  <h1>🌿 AirWatch India</h1>
+  <p class="subtitle">Real-time air quality for any Indian city</p>
+
+  <div class="search-row">
+    <input type="text" id="cityInput" placeholder="Enter city name…" />
+    <button id="searchBtn" onclick="fetchAQI()">Check →</button>
+  </div>
+
+  <div class="error" id="errorMsg">⚠ City not found. Please try again.</div>
+
+  <div class="result-box" id="resultBox">
+    <div class="city-name" id="cityDisplay"></div>
+
+    <!-- AQI -->
+    <div class="aqi-row">
+      <div class="aqi-number" id="aqiNumber"></div>
+      <div>
+        <div class="cat-title"  id="catTitle"></div>
+        <div class="cat-advice" id="catAdvice"></div>
+      </div>
+    </div>
+    <div class="source-tag">📡 OpenWeatherMap → EPA AQI formula</div>
+
+    <!-- Pollutants -->
+    <div class="pollutant-row">
+      <div class="pollutant-box"><div class="value" id="pm25"></div><div class="label">PM 2.5</div></div>
+      <div class="pollutant-box"><div class="value" id="pm10"></div><div class="label">PM 10</div></div>
+      <div class="pollutant-box"><div class="value" id="no2"></div> <div class="label">NO₂</div></div>
+    </div>
+
+    <!-- Mask -->
+    <div class="chart-title">😷 Mask Recommendation</div>
+    <div class="mask-box">
+      <div class="mask-emoji" id="maskEmoji"></div>
+      <div class="mask-title" id="maskTitle"></div>
+      <div class="mask-tip"   id="maskTip"></div>
+    </div>
+
+    <!-- 7-Day Trend — separate chart -->
+    <div class="chart-title">📈 7-Day AQI Trend (Historical)</div>
+    <div class="chart-wrap"><canvas id="weekChart"></canvas></div>
+    <div class="source-tag">📡 OWM Historical Data → EPA AQI</div>
+
+    <!-- 24hr Forecast — separate chart -->
+    <div class="chart-title">🔮 24-Hour AQI Forecast</div>
+    <div class="chart-wrap"><canvas id="forecastChart"></canvas></div>
+    <div class="source-tag">📡 OWM Forecast → EPA AQI ✅ Same scale as above</div>
+  </div>
+
+  <script>
+    const OWM_KEY = "45a8fae89922cdeae3f472a2a477c2cb";
+    let weekChart = null, forecastChart = null;
+
+    // ── EPA Formula ──────────────────────────
+    function pm25ToAqi(pm) {
+      const bp = [
+        [0.0,   12.0,   0,   50],
+        [12.1,  35.4,  51,  100],
+        [35.5,  55.4, 101,  150],
+        [55.5, 150.4, 151,  200],
+        [150.5,250.4, 201,  300],
+        [250.5, 500.4,301,  500],
+      ];
+      for (const [cLow, cHigh, aqiLow, aqiHigh] of bp) {
+        if (pm >= cLow && pm <= cHigh)
+          return Math.round(((aqiHigh - aqiLow) / (cHigh - cLow)) * (pm - cLow) + aqiLow);
+      }
+      return 500;
+    }
+
+    // ── AQI Category ────────────────────────
+    function getCategory(aqi) {
+      if (aqi <= 50)  return { title: "Good 🌿",             advice: "Air is clean — enjoy outdoors!",         color: "#4cf0b4" };
+      if (aqi <= 100) return { title: "Moderate 😐",         advice: "Acceptable for most people.",            color: "#f0d34c" };
+      if (aqi <= 150) return { title: "Sensitive Groups 😷", advice: "Limit outdoor time if you have asthma.", color: "#f0934c" };
+      if (aqi <= 200) return { title: "Unhealthy ⚠️",        advice: "Everyone should reduce outdoor time.",   color: "#e04c4c" };
+                      return { title: "Very Unhealthy 🚨",   advice: "Stay indoors as much as possible.",      color: "#a855f7" };
+    }
+
+    // ── Mask Recommendation ──────────────────
+    function getMask(aqi) {
+      if (aqi <= 50)  return { emoji: "😊", title: "No Mask Needed",             tip: "Air is clean — go outside freely!" };
+      if (aqi <= 100) return { emoji: "🙂", title: "Mask Optional",              tip: "Acceptable. Sensitive people may wear a basic mask." };
+      if (aqi <= 150) return { emoji: "😷", title: "Wear a Surgical Mask",       tip: "Unhealthy for sensitive groups. Use a surgical mask." };
+      if (aqi <= 200) return { emoji: "😷", title: "Wear an N95 Mask",           tip: "Air is unhealthy. Avoid outdoor exercise." };
+                      return { emoji: "🚨", title: "N95 Mandatory — HAZARDOUS!", tip: "Do NOT go outside. Keep windows shut." };
+    }
+
+    // ── Main Function ────────────────────────
+    async function fetchAQI() {
+      const city = document.getElementById("cityInput").value.trim();
+      if (!city) return;
+
+      const btn = document.getElementById("searchBtn");
+      btn.disabled = true; btn.textContent = "Loading…";
+      document.getElementById("errorMsg").style.display = "none";
+
+      try {
+        // Step 1: City → lat/lon
+        const geoRes  = await fetch(`http://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(city)},IN&limit=1&appid=${OWM_KEY}`);
+        const geoJson = await geoRes.json();
+        if (!geoJson.length) throw new Error("City not found");
+
+        const lat      = geoJson[0].lat;
+        const lon      = geoJson[0].lon;
+        const cityName = geoJson[0].name;
+
+        // Step 2: Current AQI
+        const curRes  = await fetch(`http://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${OWM_KEY}`);
+        const curJson = await curRes.json();
+        const comp    = curJson.list[0].components;
+        const pm25    = comp.pm2_5;
+        const pm10    = comp.pm10;
+        const no2     = comp.no2;
+        const aqi     = pm25ToAqi(pm25);
+        const cat     = getCategory(aqi);
+        const mask    = getMask(aqi);
+
+        // Fill UI
+        document.getElementById("cityDisplay").textContent = cityName;
+        const aqiEl = document.getElementById("aqiNumber");
+        aqiEl.textContent = aqi; aqiEl.style.color = cat.color;
+        document.getElementById("catTitle").textContent  = cat.title;
+        document.getElementById("catTitle").style.color  = cat.color;
+        document.getElementById("catAdvice").textContent = cat.advice;
+        document.getElementById("pm25").textContent = pm25.toFixed(1);
+        document.getElementById("pm10").textContent = pm10.toFixed(1);
+        document.getElementById("no2").textContent  = no2.toFixed(1);
+        document.getElementById("maskEmoji").textContent = mask.emoji;
+        document.getElementById("maskTitle").textContent = mask.title;
+        document.getElementById("maskTitle").style.color = cat.color;
+        document.getElementById("maskTip").textContent   = mask.tip;
+
+        // Step 3: 7-Day Historical Chart
+        const endTime   = Math.floor(Date.now() / 1000);
+        const startTime = endTime - (7 * 24 * 3600);
+        const histRes   = await fetch(`http://api.openweathermap.org/data/2.5/air_pollution/history?lat=${lat}&lon=${lon}&start=${startTime}&end=${endTime}&appid=${OWM_KEY}`);
+        const histJson  = await histRes.json();
+
+        // Pick one reading per day
+        const histData  = histJson.list || [];
+        const step      = Math.max(1, Math.floor(histData.length / 7));
+        const weekItems = histData.filter((_, i) => i % step === 0).slice(0, 7);
+        const weekLabels = weekItems.map(item => {
+          const d = new Date(item.dt * 1000);
+          return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+        });
+        const weekValues = weekItems.map(item => pm25ToAqi(item.components.pm2_5));
+
+        if (weekChart) weekChart.destroy();
+        weekChart = new Chart(document.getElementById("weekChart").getContext("2d"), {
+          type: "line",
+          data: {
+            labels: weekLabels,
+            datasets: [{ data: weekValues, borderColor: "#4cf0b4",
+              backgroundColor: "#4cf0b422", borderWidth: 2,
+              pointBackgroundColor: "#4cf0b4", pointRadius: 5,
+              fill: true, tension: 0.4 }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: "#888" }, grid: { color: "#2e3348" } },
+              y: { ticks: { color: "#888" }, grid: { color: "#2e3348" }, beginAtZero: false }
+            }
+          }
+        });
+
+        // Step 4: 24hr Forecast Chart (separate)
+        const fRes  = await fetch(`http://api.openweathermap.org/data/2.5/air_pollution/forecast?lat=${lat}&lon=${lon}&appid=${OWM_KEY}`);
+        const fJson = await fRes.json();
+
+        // Start with current AQI then next 23 hours
+        const fLabels = ["Now", ...fJson.list.slice(0, 23).map(item =>
+          new Date(item.dt * 1000).getHours() + ":00"
+        )];
+        const fValues = [aqi, ...fJson.list.slice(0, 23).map(item =>
+          pm25ToAqi(item.components.pm2_5)
+        )];
+
+        if (forecastChart) forecastChart.destroy();
+        forecastChart = new Chart(document.getElementById("forecastChart").getContext("2d"), {
+          type: "line",
+          data: {
+            labels: fLabels,
+            datasets: [{ data: fValues, borderColor: "#a78bfa",
+              backgroundColor: "#a78bfa22", borderWidth: 2,
+              pointBackgroundColor: fValues.map((_, i) => i === 0 ? "#fff" : "#a78bfa"),
+              pointRadius: fValues.map((_, i) => i === 0 ? 6 : 3),
+              fill: true, tension: 0.4 }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: "#888", maxTicksLimit: 8 }, grid: { color: "#2e3348" } },
+              y: { ticks: { color: "#888" }, grid: { color: "#2e3348" }, beginAtZero: false }
+            }
+          }
+        });
+
+        document.getElementById("resultBox").style.display = "block";
+
+      } catch (e) {
+        document.getElementById("errorMsg").style.display = "block";
+      } finally {
+        btn.disabled = false; btn.textContent = "Check →";
+      }
+    }
+
+    document.getElementById("cityInput").addEventListener("keydown", e => {
+      if (e.key === "Enter") fetchAQI();
+    });
+  </script>
+
+</body>
+</html>
