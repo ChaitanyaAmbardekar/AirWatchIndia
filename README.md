@@ -1,2 +1,32 @@
 # AirWatchIndia
 AirWatch India is a real-time air quality monitoring system built for everyday Indian citizens. It fetches live pollution data for any Indian city, converts the raw PM2.5 values into AQI, and displays the results in a clean desktop dashboard built using Python. The core idea is simple ,people should know how the air quality is before going outside.
+# Need of the System:
+India is facing one of the worst air pollution crises in the world. Cities like Delhi, Mumbai, Kolkata, Lucknow and Kanpur regularly record AQI values above 150 — classified as unhealthy by WHO standards. During winter months and festivals like Diwali, AQI in several Indian cities crosses 400 which is hazardous. Yet despite living in this reality, the vast majority of Indians have no idea what the air quality is in their area on any given day.
+
+The people most affected by this ignorance are also the most vulnerable. Parents send their children to school without knowing whether the air outside will damage their developing lungs. Elderly citizens with asthma or heart conditions step out for their morning walk completely unaware that the air could trigger a medical emergency. Pregnant women commute daily through heavily polluted roads not realizing that PM2.5 particles are small enough to cross the placental barrier and affect the unborn child. Daily wage workers, street vendors, cyclists and commuters spend hours outdoors breathing air that is slowly causing irreversible harm to their bodies.
+
+The problem is not just that pollution exists — the problem is that people have no simple, accessible, and actionable tool to help them make daily decisions based on air quality.
+
+Existing apps like IQAir and AQI.in show AQI numbers and coloured scales. But a number like "AQI 178" means nothing to the average person. They need to know is it safe to go outside? Should I wear a mask, and which one? Is it safe to send my child to school today? Can my elderly parent go for their walk? No existing free tool answers these questions directly. They show data but leave the user to interpret it themselves — which most people simply do not know how to do.
+There is also a serious problem of data inconsistency in existing tools. Many apps pull current AQI from one source and forecast data from another — both using different measurement standards and different scales. This creates confusing mismatches where the current AQI shows 180 but the forecast shows 75, making direct comparison impossible and eroding user trust in the data.
+
+# Our Solution — AirWatch India
+
+AirWatch India was built to solve all of these problems in one unified system.
+The foundation of our solution is using a single data source — OpenWeatherMap — for all three layers of data: current air quality, past 7-day historical trend, and 24-hour forecast. By keeping everything within one source, we eliminate the inconsistency problem entirely. On top of this, we apply the US EPA linear interpolation formula to every single PM2.5 value — whether current or forecast. This means every number displayed in our app, across all charts, is on the exact same 0-500 AQI scale. What AQI 150 means on the current reading is identical to what AQI 150 means on the forecast chart. This consistency is something no existing free AQI tool in India currently offers.
+
+The most important and unique feature of our solution is the Mask Recommendation System. Instead of showing a number and leaving the user to figure out what it means, our app directly tells the user what action to take. If the AQI is below 50, it says no mask needed — go outside freely. If it is between 100 and 150, it recommends a surgical mask. Above 150, it recommends an N95 mask. Above 200, it issues a hazardous warning and advises staying indoors. This single feature transforms our app from a data display tool into a genuine daily health assistant.
+
+Our solution also provides three layers of time awareness that together give a complete picture of air quality. The current pollutant bar chart shows live levels of PM2.5, PM10, and NO2 right now. The 7-day historical line chart — built using real data from OWM's history API, not simulated numbers — shows whether the air has been getting better or worse over the past week. The 24-hour forecast chart shows how the AQI will change hour by hour through the day, allowing users to plan outdoor activities, morning walks, school drop-offs, and commutes around the cleanest windows of air quality.
+
+The system is built using Python with Tkinter for the desktop interface, Matplotlib and Seaborn for professional chart rendering, and Pandas for clean data handling and processing. The same solution is also available as a browser-based HTML web application using Chart.js — making it accessible to users who do not have Python installed. The geocoding is restricted to India using the ',IN' suffix in every API call, ensuring the app always serves Indian users correctly and even supports area-level searches within cities like Andheri East or Borivali rather than just city-wide averages.
+
+In summary, AirWatch India does not just show pollution data it interprets that data and tells every Indian, in plain simple language, exactly what they need to do to protect their health today.
+
+# NOVELTY:
+
+Every AQI app out there shows you a number. We show you what to do about it.
+That is the core novelty of AirWatch India. The mask recommendation system we built is something no existing free Indian air quality tool offers, it tells you specifically whether to wear a surgical mask or an N95 based on live AQI in your area right now. Beyond that, we solved a problem most users never even notice the data inconsistency between current AQI and forecast AQI that exists in almost every competing app because they pull from different sources on different scales. We fixed this by using one source, one formula, across everything.
+
+The second thing that makes this genuinely different is that we built a complete desktop health dashboard in pure Python — no browser, no login, no subscription — that gives you current data, real historical trends, and a 24-hour forecast all standardised on the same scale in one window. Hyperlocal search, real API-fetched historical data instead of simulated numbers, and a system designed from the ground up for Indian cities and Indian users — not adapted from a global product as an afterthought. That combination does not exist anywhere else for free.
+
